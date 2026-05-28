@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from markitdown import MarkItDown
-from markitdown._stream_info import StreamInfo
+import tempfile
 import io
 import os
 
@@ -32,10 +32,16 @@ async def upload(file: UploadFile = File(...)):
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(413, f"File too large. Max size is {MAX_FILE_SIZE // (1024*1024)}MB")
 
+    suffix = os.path.splitext(file.filename)[1] or ""
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
-        result = md.convert(io.BytesIO(content), stream_info=StreamInfo(filename=file.filename))
+        tmp.write(content)
+        tmp.close()
+        result = md.convert(tmp.name)
     except Exception as e:
         raise HTTPException(400, f"Conversion failed: {str(e)}")
+    finally:
+        os.unlink(tmp.name)
 
     name = file.filename.rsplit(".", 1)[0] + ".md"
     return StreamingResponse(
