@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MarkItDown Web</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MarkItDown</h1>
+      <p>Convert documents to Markdown instantly</p>
+    </header>
+
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-content">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p class="drop-text">Drag & drop a file here</p>
+        <p class="drop-sub">or click to browse</p>
+        <p class="formats">PDF, DOCX, PPTX, XLSX, images, EPUB, HTML, CSV, JSON, XML & more</p>
+      </div>
+      <input type="file" id="fileInput" hidden>
+    </div>
+
+    <div class="info" id="fileInfo" hidden>
+      <span id="fileName"></span>
+      <span id="fileSize"></span>
+    </div>
+
+    <button class="btn" id="convertBtn" disabled>Convert to Markdown</button>
+
+    <div class="spinner" id="spinner" hidden>
+      <div class="loader"></div>
+      <p>Converting...</p>
+    </div>
+
+    <div class="error" id="error" hidden></div>
+
+    <footer>
+      <p>Powered by <a href="https://github.com/microsoft/markitdown" target="_blank">Microsoft MarkItDown</a></p>
+    </footer>
+  </div>
+
+  <script>
+    const API_URL = "http://localhost:8000";
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const fileInfo = document.getElementById("fileInfo");
+    const fileName = document.getElementById("fileName");
+    const fileSize = document.getElementById("fileSize");
+    const convertBtn = document.getElementById("convertBtn");
+    const spinner = document.getElementById("spinner");
+    const errorEl = document.getElementById("error");
+
+    let selectedFile = null;
+    const MAX_SIZE = 10 * 1024 * 1024;
+
+    const SUPPORTED = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/html",
+      "text/csv",
+      "application/json",
+      "text/xml",
+      "application/xml",
+      "text/plain",
+      "application/epub+zip",
+      "image/png",
+      "image/jpeg",
+      "image/tiff",
+      "image/webp",
+      "audio/mpeg",
+      "audio/wav",
+      "audio/ogg",
+      "application/zip",
+    ];
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+      errorEl.hidden = true;
+
+      if (file.size > MAX_SIZE) {
+        showError("File too large. Maximum size is 10 MB.");
+        convertBtn.disabled = true;
+        selectedFile = null;
+        fileInfo.hidden = true;
+        return;
+      }
+
+      if (file.size === 0) {
+        showError("File is empty.");
+        convertBtn.disabled = true;
+        selectedFile = null;
+        fileInfo.hidden = true;
+        return;
+      }
+
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileSize.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+      fileInfo.hidden = false;
+      convertBtn.disabled = false;
+    }
+
+    convertBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      convertBtn.disabled = true;
+      spinner.hidden = false;
+      errorEl.hidden = true;
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const res = await fetch(`${API_URL}/upload`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Server error (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = selectedFile.name.replace(/\.[^.]+$/, "") + ".md";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        spinner.hidden = true;
+        convertBtn.disabled = false;
+      }
+    });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+  </script>
+</body>
+</html>

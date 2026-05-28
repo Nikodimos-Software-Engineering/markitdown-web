@@ -1,0 +1,157 @@
+# MarkItDown Web — Full-Stack File-to-Markdown Converter
+
+## Overview
+A single-repo full-stack app that lets users upload a file, converts it to markdown using Microsoft's MarkItDown library, and downloads the result. Frontend on Vercel, backend on Render (both free tiers).
+
+---
+
+## Project Structure
+```
+markitdown-web/
+├── backend/
+│   ├── main.py              # FastAPI app
+│   ├── requirements.txt
+│   └── runtime.txt
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── vercel.json
+├── .gitignore
+├── tasks.txt                # ← this file
+└── README.md
+```
+
+---
+
+## Tasks
+
+### 1. Initialize the project
+- [ ] Create root directory `markitdown-web/`
+- [ ] Create `backend/` and `frontend/` subdirectories
+- [ ] Create `.gitignore` (Python `__pycache__`, `.env`, `node_modules` patterns)
+- [ ] Initialize git repo and make initial commit
+
+### 2. Build the backend (FastAPI)
+**Files to create:**
+- `backend/requirements.txt` — dependencies:
+  - `fastapi`
+  - `uvicorn[standard]`
+  - `markitdown[all]`
+  - `python-multipart`
+- `backend/runtime.txt` — `python-3.11.x` (tells Render which Python version)
+- `backend/main.py` — FastAPI app with:
+  - `POST /upload` endpoint accepting `UploadFile`
+  - 10MB max file size limit
+  - Read file into `BytesIO`, pass to `MarkItDown().convert()`
+  - Return markdown as `StreamingResponse` (attachment download)
+  - CORS middleware allowing frontend origin (Vercel URL)
+  - Root `GET /` health-check endpoint
+
+**Verify locally:**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+# Test with: curl -F "file=@test.pdf" http://localhost:8000/upload -o output.md
+```
+
+### 3. Build the frontend (Vanilla JS)
+**Files to create:**
+- `frontend/index.html` — single-page UI with:
+  - Drag-and-drop zone (or file input button)
+  - File type validation (show supported formats)
+  - File size validation (< 10MB)
+  - Upload button that sends file to backend `/upload`
+  - Loading spinner during conversion
+  - Auto-download the returned `.md` file
+  - Error message display (unsupported format, too large, server error)
+  - Link to backend URL configurable (store as a constant at top)
+- `frontend/style.css` — clean minimalist styling (or use Pico CSS from CDN)
+- `frontend/vercel.json` — rewrite rules so SPA routing works (even though it's one page)
+
+**Test locally:**
+- Open `frontend/index.html` directly (file:// or via `python -m http.server`)
+- Point it at the local backend URL (`http://localhost:8000`)
+- Upload a test file and verify download works
+
+### 4. Deploy backend to Render.com
+- [ ] Push repo to GitHub
+- [ ] Create free Render account at https://render.com
+- [ ] New Web Service → connect GitHub repo
+  - Root directory: `backend/`
+  - Build command: `pip install -r requirements.txt`
+  - Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+  - Free plan (sleeps after 15 min idle)
+- [ ] Add environment variable in Render dashboard:
+  - `MAX_FILE_SIZE` = `10485760` (10MB)
+- [ ] Get the public URL (e.g. `https://markitdown-api.onrender.com`)
+- [ ] Test the deployed backend:
+  ```bash
+  curl -F "file=@test.pdf" https://YOUR-APP.onrender.com/upload -o output.md
+  ```
+
+### 5. Deploy frontend to Vercel
+- [ ] Create free Vercel account at https://vercel.com
+- [ ] New Project → import GitHub repo
+  - Root directory: `frontend/`
+  - Framework preset: "Other" (static site)
+  - No build command needed
+- [ ] Add environment variable in Vercel:
+  - `VITE_API_URL` or hardcode the Render URL in `index.html`
+- [ ] Deploy (Vercel auto-detects static HTML)
+- [ ] Get the public URL (e.g. `https://markitdown-ui.vercel.app`)
+
+### 6. Final integration test
+- [ ] Open the Vercel frontend URL in a browser
+- [ ] Upload a test file (PDF, DOCX, image, etc.)
+- [ ] Verify markdown downloads correctly
+- [ ] Test with an unsupported format → check error handling
+- [ ] Test with a file > 10MB → check size validation
+- [ ] Test cold start (wait 15+ min, then upload again — expect ~30s delay)
+
+### 7. Polish & portfolio prep
+- [ ] Write `README.md` with:
+  - Project description and screenshot
+  - Tech stack badges (FastAPI, Vercel, Render, MarkItDown)
+  - Architecture diagram (text-based)
+  - Live demo links
+  - Local dev instructions
+  - Supported file formats
+- [ ] Add a `backend/.env.example` file
+- [ ] Ensure both frontend and backend URLs are in the README (not hardcoded in code if possible)
+- [ ] Final commit with descriptive message
+
+---
+
+## Supported File Formats (via MarkItDown)
+- PDF
+- PowerPoint (.pptx)
+- Word (.docx)
+- Excel (.xlsx, .xls)
+- Images (EXIF + OCR)
+- Audio (EXIF + transcription)
+- HTML
+- CSV, JSON, XML
+- ZIP (iterates contents)
+- EPUB
+- Plain text
+
+---
+
+## Key Config Values
+| Setting | Value | Where |
+|---------|-------|-------|
+| Max file size | 10 MB (10485760 bytes) | Backend `main.py` |
+| Backend Python | 3.11.x | `backend/runtime.txt` |
+| Render region | US (Oregon) default | Render dashboard |
+| CORS origin | Vercel frontend URL | Backend `main.py` |
+
+---
+
+## Known Limitations (free tier)
+- **Cold starts**: Render free tier sleeps after 15 min idle; first request takes ~30s
+- **Memory**: 512MB RAM on Render free; files near 10MB may strain it
+- **No persistence**: Files are not stored — converted in memory, result streamed once
+- **No auth**: Anyone with the URL can use it
