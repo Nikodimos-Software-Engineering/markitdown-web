@@ -150,8 +150,8 @@
         });
 
         if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || `Server error (${res.status})`);
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || `Server error (${res.status})`);
         }
 
         const blob = await res.blob();

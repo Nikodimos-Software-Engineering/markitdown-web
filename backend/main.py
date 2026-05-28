@@ -1,12 +1,24 @@
+import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from markitdown import MarkItDown
 import tempfile
 import io
 import os
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="MarkItDown Web")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.exception(f"Unhandled error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong. Please try again."},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,7 +51,8 @@ async def upload(file: UploadFile = File(...)):
         tmp.close()
         result = md.convert(tmp.name)
     except Exception as e:
-        raise HTTPException(400, f"Conversion failed: {str(e)}")
+        logger.error(f"Conversion failed for {file.filename}: {e}")
+        raise HTTPException(400, "This file format is not supported or could not be converted.")
     finally:
         os.unlink(tmp.name)
 
