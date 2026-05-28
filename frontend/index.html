@@ -27,9 +27,16 @@
       <input type="file" id="fileInput" hidden>
     </div>
 
-    <div class="info" id="fileInfo" hidden>
-      <span id="fileName"></span>
-      <span id="fileSize"></span>
+    <div class="file-bar" id="fileBar" hidden>
+      <span class="file-bar-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      </span>
+      <span class="file-bar-name" id="fileName"></span>
+      <span class="file-bar-size" id="fileSize"></span>
+      <button class="file-bar-close" id="clearBtn" title="Remove file">&times;</button>
     </div>
 
     <button class="btn" id="convertBtn" disabled>Convert to Markdown</button>
@@ -39,6 +46,8 @@
       <p>Converting...</p>
     </div>
 
+    <button class="btn btn-success" id="downloadBtn" hidden>Download Markdown</button>
+
     <div class="error" id="error" hidden></div>
 
     <footer>
@@ -47,42 +56,22 @@
   </div>
 
   <script>
-    const API_URL = "http://localhost:8000";
+    const API_URL = "https://markitdown-web-8w0j.onrender.com";
 
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
-    const fileInfo = document.getElementById("fileInfo");
+    const fileBar = document.getElementById("fileBar");
     const fileName = document.getElementById("fileName");
     const fileSize = document.getElementById("fileSize");
+    const clearBtn = document.getElementById("clearBtn");
     const convertBtn = document.getElementById("convertBtn");
     const spinner = document.getElementById("spinner");
+    const downloadBtn = document.getElementById("downloadBtn");
     const errorEl = document.getElementById("error");
 
     let selectedFile = null;
+    let downloadUrl = null;
     const MAX_SIZE = 10 * 1024 * 1024;
-
-    const SUPPORTED = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "text/html",
-      "text/csv",
-      "application/json",
-      "text/xml",
-      "application/xml",
-      "text/plain",
-      "application/epub+zip",
-      "image/png",
-      "image/jpeg",
-      "image/tiff",
-      "image/webp",
-      "audio/mpeg",
-      "audio/wav",
-      "audio/ogg",
-      "application/zip",
-    ];
 
     dropZone.addEventListener("click", () => fileInput.click());
 
@@ -105,29 +94,37 @@
       if (fileInput.files.length) handleFile(fileInput.files[0]);
     });
 
+    clearBtn.addEventListener("click", resetAll);
+
+    downloadBtn.addEventListener("click", () => {
+      if (!downloadUrl) return;
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = selectedFile.name.replace(/\.[^.]+$/, "") + ".md";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+
     function handleFile(file) {
       errorEl.hidden = true;
 
       if (file.size > MAX_SIZE) {
         showError("File too large. Maximum size is 10 MB.");
-        convertBtn.disabled = true;
-        selectedFile = null;
-        fileInfo.hidden = true;
         return;
       }
 
       if (file.size === 0) {
         showError("File is empty.");
-        convertBtn.disabled = true;
-        selectedFile = null;
-        fileInfo.hidden = true;
         return;
       }
 
       selectedFile = file;
       fileName.textContent = file.name;
-      fileSize.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
-      fileInfo.hidden = false;
+      fileSize.textContent = (file.size / 1024).toFixed(1) + " KB";
+      dropZone.hidden = true;
+      fileBar.hidden = false;
+      convertBtn.hidden = false;
       convertBtn.disabled = false;
     }
 
@@ -137,6 +134,11 @@
       convertBtn.disabled = true;
       spinner.hidden = false;
       errorEl.hidden = true;
+      downloadBtn.hidden = true;
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+        downloadUrl = null;
+      }
 
       const formData = new FormData();
       formData.append("file", selectedFile);
@@ -153,21 +155,32 @@
         }
 
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = selectedFile.name.replace(/\.[^.]+$/, "") + ".md";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        downloadUrl = URL.createObjectURL(blob);
+        convertBtn.hidden = true;
+        downloadBtn.hidden = false;
       } catch (err) {
         showError(err.message);
+        convertBtn.disabled = false;
       } finally {
         spinner.hidden = true;
-        convertBtn.disabled = false;
       }
     });
+
+    function resetAll() {
+      selectedFile = null;
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+        downloadUrl = null;
+      }
+      fileInput.value = "";
+      dropZone.hidden = false;
+      fileBar.hidden = true;
+      convertBtn.hidden = false;
+      convertBtn.disabled = true;
+      downloadBtn.hidden = true;
+      spinner.hidden = true;
+      errorEl.hidden = true;
+    }
 
     function showError(msg) {
       errorEl.textContent = msg;
